@@ -1,47 +1,45 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const fs = require('fs');
+const sqlite3 = require('sqlite3').verbose();
 const app = express();
 const port = 3002;
 
 app.use(bodyParser.json());
 app.use(cors());
 
-// Function to read data from JSON file
-const readData = () => {
-  try {
-    const data = fs.readFileSync('data.json', 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error reading data:', error);
-    return {};
-  }
-};
+// Initialize SQLite database
+const db = new sqlite3.Database('data.db'); // to store in runtime memory Change 'data.db' to ':memory:' 
 
-// Function to write data to JSON file
-const writeData = (data) => {
-  try {
-    fs.writeFileSync('data.json', JSON.stringify(data, null, 2));
-  } catch (error) {
-    console.error('Error writing data:', error);
-  }
-};
+db.serialize(() => {
+  db.run("CREATE TABLE IF NOT EXISTS data (key TEXT PRIMARY KEY, value TEXT)");
+});
 
 // Endpoint to get data
 app.get('/getData', (req, res) => {
   const key = req.query.key;
-  const data = readData();
-  res.json(data[key] || null);
+  db.get("SELECT value FROM data WHERE key = ?", [key], (err, row) => {
+    if (err) {
+      console.error('Error fetching data:', err);
+      res.status(500).json({ error: 'Internal Server Error' });
+    } else {
+      res.json(row ? JSON.parse(row.value) : null);
+    }
+  });
 });
 
 // Endpoint to save data
 app.post('/saveData', (req, res) => {
   const { key, data } = req.body;
-  const currentData = readData();
-  currentData[key] = data;
-  writeData(currentData);
-  res.sendStatus(200);
+  const value = JSON.stringify(data);
+  db.run("INSERT OR REPLACE INTO data (key, value) VALUES (?, ?)", [key, value], (err) => {
+    if (err) {
+      console.error('Error saving data:', err);
+      res.status(500).json({ error: 'Internal Server Error' });
+    } else {
+      res.sendStatus(200);
+    }
+  });
 });
 
 app.listen(port, () => {
