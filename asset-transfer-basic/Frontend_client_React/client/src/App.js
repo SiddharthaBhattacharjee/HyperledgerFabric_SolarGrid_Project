@@ -5,30 +5,60 @@ import Linechart from "./components/Linechart"
 import "./App.css";
 import siemensLogo from "./res/R.png";
 
-const useLocalStorageState = (key, defaultValue) => {
+const useDatabaseState = (key, defaultValue) => {
   const [state, setState] = useState(() => {
-    const valueInLocalStorage = window.localStorage.getItem(key);
-    if (valueInLocalStorage) {
-      return JSON.parse(valueInLocalStorage);
-    }
-    return defaultValue;
+    // Fetch data from the database when the component mounts
+    const fetchData = async () => {
+      try {
+        const response = await fetch(`http://localhost:3002/getData?key=${key}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        return data !== null ? data : defaultValue;
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+        return defaultValue;
+      }
+    };
+
+    // Initialize state with fetched data or default value
+    fetchData().then(fetchedData => setState(fetchedData));
+    return defaultValue; // Temporary default value until fetch completes
   });
 
   useEffect(() => {
-    window.localStorage.setItem(key, JSON.stringify(state));
-  }, [key, state]);
+    // Save data to the database whenever the state changes
+    const saveData = async () => {
+      try {
+        await fetch(`http://localhost:3002/saveData`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ key, data: state }),
+        });
+      } catch (error) {
+        console.error('Failed to save data:', error);
+      }
+    };
+
+    if (state !== defaultValue) {
+      saveData();
+    }
+  }, [key, state, defaultValue]);
 
   return [state, setState];
-}
+};
 
 function App() {
-  const [data, setData] = useLocalStorageState('data', [[0, 0, 0], [0, 0, 0]]);
-  const [Org1Gain, SetOrg1Gain] = useLocalStorageState('Org1Gain', [0]);
-  const [Org2Gain, SetOrg2Gain] = useLocalStorageState('Org2Gain', [0]);
-  const [Org1Loss, SetOrg1Loss] = useLocalStorageState('Org1Loss', [0]);
-  const [Org2Loss, SetOrg2Loss] = useLocalStorageState('Org2Loss', [0]);
-  const [Org1Record, SetOrg1Record] = useLocalStorageState('Org1Record', [0]);
-  const [Org2Record, SetOrg2Record] = useLocalStorageState('Org2Record', [0]);
+  const [data, setData] = useDatabaseState('data', [[0, 0, 0], [0, 0, 0]]);
+  const [Org1Gain, SetOrg1Gain] = useDatabaseState('Org1Gain', [0]);
+  const [Org2Gain, SetOrg2Gain] = useDatabaseState('Org2Gain', [0]);
+  const [Org1Loss, SetOrg1Loss] = useDatabaseState('Org1Loss', [0]);
+  const [Org2Loss, SetOrg2Loss] = useDatabaseState('Org2Loss', [0]);
+  const [Org1Record, SetOrg1Record] = useDatabaseState('Org1Record', [0]);
+  const [Org2Record, SetOrg2Record] = useDatabaseState('Org2Record', [0]);
 
   let updateRecords = (newData) => {
     SetOrg1Record(prevState => [...prevState, parseFloat(newData[0][0]).toFixed(2)]);
