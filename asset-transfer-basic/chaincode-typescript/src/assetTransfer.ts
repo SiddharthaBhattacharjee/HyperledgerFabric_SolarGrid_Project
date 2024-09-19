@@ -11,15 +11,15 @@ import {Asset} from './asset';
 export class AssetTransferContract extends Contract {
 
     @Transaction()
-    public async InitLedger(ctx: Context): Promise<void> {
+    public async InitLedger(ctx: Context, org1Val: number, org2Val: number): Promise<void> {
         const assets: Asset[] = [
             {
                 ID: 'Org1',
-                TokenValue: 300,
+                TokenValue: org1Val,
             },
             {
                 ID: 'Org2',
-                TokenValue: 400,
+                TokenValue: org2Val,
             },
         ];
 
