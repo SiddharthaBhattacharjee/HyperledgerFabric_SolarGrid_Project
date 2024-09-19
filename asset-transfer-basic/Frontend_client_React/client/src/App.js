@@ -4,6 +4,7 @@ import { CategoryScale } from "chart.js";
 import Linechart from "./components/Linechart"
 import "./App.css";
 import siemensLogo from "./res/R.png";
+import Loading from './components/Loading';
 
 //@Deprecated
 // const useDatabaseState = (key, defaultValue) => {
@@ -53,6 +54,7 @@ import siemensLogo from "./res/R.png";
 // };
 
 function App() {
+  const [loaded, setLoaded] = useState(false);
   const [data, setData] = useState([[0,0,0],[0,0,0]])
   const [Org1Gain, setOrg1Gain] = useState([0]);
   const [Org2Gain, setOrg2Gain] = useState([0]);
@@ -69,6 +71,17 @@ function App() {
   // const [Org1Record, SetOrg1Record] = useDatabaseState('Org1Record', [0]);
   // const [Org2Record, SetOrg2Record] = useDatabaseState('Org2Record', [0]);
 
+  const fetchData = () => {
+    window.scrollTo(0, 0);
+        fetch('http://localhost:3001/getData')
+          .then(response => response.json())
+          .then(newData => {
+            updateRecords(newData);
+            console.log("Data updated");
+            console.log("Data: " + newData.toString());
+          });
+      };
+
   const updateRecords = (newData) => {
     try {
         setData(newData[0]);
@@ -78,10 +91,17 @@ function App() {
         setOrg2Record(newData[4]);
         setOrg2Gain(newData[5]);
         setOrg2Loss(newData[6]);
+        setTimeout(() => {
+          setLoaded(true);
+        }, 3000);
     } catch (error) {
         console.error('Error updating data:', error);
     }
 };
+
+
+
+
   //@Depricated
   // let updateRecords = (newData) => {
   //   SetOrg1Record(prevState => [...prevState, parseFloat(newData[0][0]).toFixed(2)]);
@@ -113,23 +133,42 @@ function App() {
   //   setData(newData);
   // }
 
+  // useEffect(() => {
+  //   const fetchData = () => {
+  //     fetch('http://localhost:3001/getData')
+  //       .then(response => response.json())
+  //       .then(newData => {
+  //         updateRecords(newData);
+  //         console.log("Data updated");
+  //         console.log("Data: " + newData.toString());
+  //       });
+  //   };
+
+  //   fetchData(); // Fetch data immediately
+
+  //   const intervalId = setInterval(fetchData, 10000); // Fetch data every 10 seconds
+
+  //   return () => clearInterval(intervalId); // Clean up on component unmount
+  // }, []);
+
   useEffect(() => {
-    const fetchData = () => {
-      fetch('http://localhost:3001/getData')
-        .then(response => response.json())
-        .then(newData => {
-          updateRecords(newData);
-          console.log("Data updated");
-          console.log("Data: " + newData.toString());
-        });
+    const eventSource = new EventSource('http://localhost:3001/events');
+
+    eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        setData(data[0]);
+        setOrg1Record(data[1]);
+        setOrg1Gain(data[2]);
+        setOrg1Loss(data[3]);
+        setOrg2Record(data[4]);
+        setOrg2Gain(data[5]);
+        setOrg2Loss(data[6]);
     };
 
-    fetchData(); // Fetch data immediately
-
-    const intervalId = setInterval(fetchData, 10000); // Fetch data every 10 seconds
-
-    return () => clearInterval(intervalId); // Clean up on component unmount
-  }, []);
+    return () => {
+        eventSource.close();
+    };
+}, []);
 
   let Org1RecData = {
     labels: Array.from({ length: Org1Record.length }, (_, i) => i),
@@ -248,11 +287,18 @@ function App() {
   let Org1Percentage = parseFloat(((Org1Record[Org1Record.length - 1] - Org1Record[Org1Record.length - 2] + Math.random()*4 -2) / (Org1Record[Org1Record.length - 1] + 1)) * 100).toFixed(2);
   let Org2Percentage = parseFloat(((Org2Record[Org2Record.length - 1] - Org2Record[Org2Record.length - 2] + Math.random()*4 -2) / (Org2Record[Org2Record.length - 1] + 1)) * 100).toFixed(2);
 
+  if(!loaded){
+    fetchData();
+  }
+
   return (
     <div class="parent">
-      <div class="navbar">
+      <div class="navbar" style={{zIndex:9999}}>
         <div class="logoWrapper"><img src={siemensLogo} alt="Siemens Logo" class="logopng"></img><div class="logoText">Solar Grid Network Dashboard</div></div>
       </div>
+      {!loaded?
+      <Loading />:<></>
+      }
       <div class="superWrapper">
         <div class="counterBox">
           <div class="counter">
@@ -297,5 +343,6 @@ function App() {
     </div>
   );
 }
+
 
 export default App;
