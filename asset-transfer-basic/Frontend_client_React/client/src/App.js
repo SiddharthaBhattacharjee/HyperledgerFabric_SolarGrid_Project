@@ -5,90 +5,113 @@ import Linechart from "./components/Linechart"
 import "./App.css";
 import siemensLogo from "./res/R.png";
 
-const useDatabaseState = (key, defaultValue) => {
-  const [state, setState] = useState(() => {
-    // Fetch data from the database when the component mounts
-    const fetchData = async () => {
-      try {
-        const response = await fetch(`http://localhost:3002/getData?key=${key}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        return data !== null ? data : defaultValue;
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-        return defaultValue;
-      }
-    };
+//@Deprecated
+// const useDatabaseState = (key, defaultValue) => {
+//   const [state, setState] = useState(() => {
+//     // Fetch data from the database when the component mounts
+//     const fetchData = async () => {
+//       try {
+//         const response = await fetch(`http://localhost:3002/getData?key=${key}`);
+//         if (!response.ok) {
+//           throw new Error(`HTTP error! status: ${response.status}`);
+//         }
+//         const data = await response.json();
+//         return data !== null ? data : defaultValue;
+//       } catch (error) {
+//         console.error('Failed to fetch data:', error);
+//         return defaultValue;
+//       }
+//     };
 
-    // Initialize state with fetched data or default value
-    fetchData().then(fetchedData => setState(fetchedData));
-    return defaultValue; // Temporary default value until fetch completes
-  });
+//     // Initialize state with fetched data or default value
+//     fetchData().then(fetchedData => setState(fetchedData));
+//     return defaultValue; // Temporary default value until fetch completes
+//   });
 
-  useEffect(() => {
-    // Save data to the database whenever the state changes
-    const saveData = async () => {
-      try {
-        await fetch(`http://localhost:3002/saveData`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ key, data: state }),
-        });
-      } catch (error) {
-        console.error('Failed to save data:', error);
-      }
-    };
+//   useEffect(() => {
+//     // Save data to the database whenever the state changes
+//     const saveData = async () => {
+//       try {
+//         await fetch(`http://localhost:3002/saveData`, {
+//           method: 'POST',
+//           headers: {
+//             'Content-Type': 'application/json',
+//           },
+//           body: JSON.stringify({ key, data: state }),
+//         });
+//       } catch (error) {
+//         console.error('Failed to save data:', error);
+//       }
+//     };
 
-    if (state !== defaultValue) {
-      saveData();
-    }
-  }, [key, state, defaultValue]);
+//     if (state !== defaultValue) {
+//       saveData();
+//     }
+//   }, [key, state, defaultValue]);
 
-  return [state, setState];
-};
+//   return [state, setState];
+// };
 
 function App() {
-  const [data, setData] = useDatabaseState('data', [[0, 0, 0], [0, 0, 0]]);
-  const [Org1Gain, SetOrg1Gain] = useDatabaseState('Org1Gain', [0]);
-  const [Org2Gain, SetOrg2Gain] = useDatabaseState('Org2Gain', [0]);
-  const [Org1Loss, SetOrg1Loss] = useDatabaseState('Org1Loss', [0]);
-  const [Org2Loss, SetOrg2Loss] = useDatabaseState('Org2Loss', [0]);
-  const [Org1Record, SetOrg1Record] = useDatabaseState('Org1Record', [0]);
-  const [Org2Record, SetOrg2Record] = useDatabaseState('Org2Record', [0]);
+  const [data, setData] = useState([[0,0,0],[0,0,0]])
+  const [Org1Gain, setOrg1Gain] = useState([0]);
+  const [Org2Gain, setOrg2Gain] = useState([0]);
+  const [Org1Loss, setOrg1Loss] = useState([0]);
+  const [Org2Loss, setOrg2Loss] = useState([0]);
+  const [Org1Record, setOrg1Record] = useState([0]);
+  const [Org2Record, setOrg2Record] = useState([0]);
+  //@Deprecated
+  // const [data, setData] = useDatabaseState('data', [[0, 0, 0], [0, 0, 0]]);
+  // const [Org1Gain, SetOrg1Gain] = useDatabaseState('Org1Gain', [0]);
+  // const [Org2Gain, SetOrg2Gain] = useDatabaseState('Org2Gain', [0]);
+  // const [Org1Loss, SetOrg1Loss] = useDatabaseState('Org1Loss', [0]);
+  // const [Org2Loss, SetOrg2Loss] = useDatabaseState('Org2Loss', [0]);
+  // const [Org1Record, SetOrg1Record] = useDatabaseState('Org1Record', [0]);
+  // const [Org2Record, SetOrg2Record] = useDatabaseState('Org2Record', [0]);
 
-  let updateRecords = (newData) => {
-    SetOrg1Record(prevState => [...prevState, parseFloat(newData[0][0]).toFixed(2)]);
-    SetOrg2Record(prevState => [...prevState, parseFloat(newData[1][0]).toFixed(2)]);
-    if (parseFloat(newData[0][2]) === 0) {
-      SetOrg1Gain(prevState => [...prevState, prevState[prevState.length - 1]+Math.random()*2 -1]);
+  const updateRecords = (newData) => {
+    try {
+        setData(newData[0]);
+        setOrg1Record(newData[1]);
+        setOrg1Gain(newData[2]);
+        setOrg1Loss(newData[3]);
+        setOrg2Record(newData[4]);
+        setOrg2Gain(newData[5]);
+        setOrg2Loss(newData[6]);
+    } catch (error) {
+        console.error('Error updating data:', error);
     }
-    else {
-      SetOrg1Gain(prevState => [...prevState, parseFloat(newData[0][2]).toFixed(2) * -1]);
-    }
-    if (parseFloat(newData[0][1]) === 0) {
-      SetOrg1Loss(prevState => [...prevState, prevState[prevState.length - 1]+Math.random()*2 -1]);
-    }
-    else {
-      SetOrg1Loss(prevState => [...prevState, parseFloat(newData[0][1]).toFixed(2) * -1]);
-    }
-    if (parseFloat(newData[1][2]) === 0) {
-      SetOrg2Gain(prevState => [...prevState, prevState[prevState.length - 1]+Math.random()*2 -1]);
-    }
-    else {
-      SetOrg2Gain(prevState => [...prevState, parseFloat(newData[1][2]).toFixed(2) * -1]);
-    }
-    if (parseFloat(newData[1][1]) === 0) {
-      SetOrg2Loss(prevState => [...prevState, prevState[prevState.length - 1]+Math.random()*2 -1]);
-    }
-    else {
-      SetOrg2Loss(prevState => [...prevState, parseFloat(newData[1][1]).toFixed(2) * -1]);
-    }
-    setData(newData);
-  }
+};
+  //@Depricated
+  // let updateRecords = (newData) => {
+  //   SetOrg1Record(prevState => [...prevState, parseFloat(newData[0][0]).toFixed(2)]);
+  //   SetOrg2Record(prevState => [...prevState, parseFloat(newData[1][0]).toFixed(2)]);
+  //   if (parseFloat(newData[0][2]) === 0) {
+  //     SetOrg1Gain(prevState => [...prevState, prevState[prevState.length - 1]+Math.random()*2 -1]);
+  //   }
+  //   else {
+  //     SetOrg1Gain(prevState => [...prevState, parseFloat(newData[0][2]).toFixed(2) * -1]);
+  //   }
+  //   if (parseFloat(newData[0][1]) === 0) {
+  //     SetOrg1Loss(prevState => [...prevState, prevState[prevState.length - 1]+Math.random()*2 -1]);
+  //   }
+  //   else {
+  //     SetOrg1Loss(prevState => [...prevState, parseFloat(newData[0][1]).toFixed(2) * -1]);
+  //   }
+  //   if (parseFloat(newData[1][2]) === 0) {
+  //     SetOrg2Gain(prevState => [...prevState, prevState[prevState.length - 1]+Math.random()*2 -1]);
+  //   }
+  //   else {
+  //     SetOrg2Gain(prevState => [...prevState, parseFloat(newData[1][2]).toFixed(2) * -1]);
+  //   }
+  //   if (parseFloat(newData[1][1]) === 0) {
+  //     SetOrg2Loss(prevState => [...prevState, prevState[prevState.length - 1]+Math.random()*2 -1]);
+  //   }
+  //   else {
+  //     SetOrg2Loss(prevState => [...prevState, parseFloat(newData[1][1]).toFixed(2) * -1]);
+  //   }
+  //   setData(newData);
+  // }
 
   useEffect(() => {
     const fetchData = () => {

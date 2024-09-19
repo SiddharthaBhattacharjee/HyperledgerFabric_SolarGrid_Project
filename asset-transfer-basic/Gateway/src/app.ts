@@ -11,6 +11,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import CryptoJS from 'crypto-js';
 import { deprecate } from 'util';
+const sqlite3 = require('sqlite3').verbose();
 const NodeRSA = require('node-rsa');
 const Crypto_ = require('crypto');
 var bodyParser = require('body-parser');
@@ -49,8 +50,15 @@ async function main() {
 
             const contract = network.getContract(chaincodeName);
 
+            //Recover Save state
+            const filePath0 = path.join(__dirname, 'Databases', 'state.json');
+            const TempSaveState = fs.readFileSync(filePath0, 'utf8');
+            const saveState = JSON.parse(TempSaveState);
+            let Org1State = saveState["Org1"];
+            let Org2State = saveState["Org2"];
+
             console.log('\n--> Submit Transaction: InitLedger, function creates the initial set of assets on the ledger');
-            await contract.submitTransaction('InitLedger');
+            await contract.submitTransaction('InitLedger',Org1State.toString(),Org2State.toString()); // Restore Save state on ledger
             console.log('*** Result: committed');
 
             console.log('\n--> Evaluate Transaction: GetAllAssets, function returns all the current assets on the ledger');
@@ -85,6 +93,62 @@ async function main() {
             //     return enc;
             // };
 
+
+            //Initialize Database:
+            const filePathSQL = path.join(__dirname, 'Databases', 'data.db');
+            const db = new sqlite3.Database(filePathSQL);
+            db.serialize(() => {
+                db.run("CREATE TABLE IF NOT EXISTS data (key TEXT PRIMARY KEY, value TEXT)");
+                db.get("SELECT COUNT(*) AS count FROM data", (err: any, row: any) => {
+                    if (err) {
+                        console.error(err.message);
+                        return;
+                    }
+                    if (row.count === 0) {
+                        // Initialize with default values if database is not initialized
+                        const defaultValues = [
+                            { key: 'stateData', value: JSON.stringify([[0,0,0],[0,0,0]])},
+                            { key: 'Org1Record', value: JSON.stringify([0]) },
+                            { key: 'Org2Record', value: JSON.stringify([0]) },
+                            { key: 'Org1Gain', value: JSON.stringify([0]) },
+                            { key: 'Org2Gain', value: JSON.stringify([0]) },
+                            { key: 'Org1Loss', value: JSON.stringify([0]) },
+                            { key: 'Org2Loss', value: JSON.stringify([0]) }
+                        ];
+                        const stmt = db.prepare("INSERT INTO data (key, value) VALUES (?, ?)");
+                        for (const val of defaultValues) {
+                            stmt.run(val.key, val.value);
+                        }
+                        stmt.finalize();
+                    }
+                });
+            });
+            // Function to fetch data from database
+            function getRecord(key: string): Promise<any[]> {
+                return new Promise((resolve, reject) => {
+                    db.get("SELECT value FROM data WHERE key = ?", [key], (err: any, row: any) => {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve(row ? JSON.parse(row.value) : null);
+                        }
+                    });
+                });
+            }
+            function getStateRecord(): Promise<any[][]> {
+                return new Promise((resolve, reject) => {
+                    db.get("SELECT value FROM data WHERE key = 'stateData'", (err: any, row: any) => {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve(row ? JSON.parse(row.value) : null);
+                        }
+                    });
+                });
+            }
+
+
+
             // Encrypt function: Takes string msg, public key string -> returns encrypted binary
             function custom_Encrypt(msg:string, Pub_key:any):any{
                 const encryptedMessage = Crypto_.publicEncrypt(Pub_key, Buffer.from(msg));
@@ -116,12 +180,67 @@ async function main() {
             console.log("ess_key1:"+ ess_key1);
             console.log("ess_key2:"+ ess_key2);
 
-            // Sends processed data to frontend
-            app.get('/getData', async (req, res) => {
+            //Init functions:
+            async function initializeStateData() {
+                try {
+                    const stateDataFromDB = await getStateRecord();
+                    if (stateDataFromDB) {
+                        return stateDataFromDB;
+                    } else {
+                        // Handle the case where there is no data in the database
+                        return [[0, 0, 0], [0, 0, 0]];
+                    }
+                } catch (error) {
+                    console.error("Error fetching state data from database:", error);
+                    // Handle the error appropriately
+                    return [[0, 0, 0], [0, 0, 0]];
+                }
+            }
+            async function initializeData(key: string) {
+                try {
+                    const DataFromDB = await getRecord(key);
+                    if (DataFromDB) {
+                        return DataFromDB;
+                    } else {
+                        // Handle the case where there is no data in the database
+                        return [0];
+                    }
+                } catch (error) {
+                    console.error("Error fetching state data from database:", error);
+                    // Handle the error appropriately
+                    return [0];
+                }
+            }
+            /* 
+            Data Format:
+            [
+                { key: 'stateData', value: JSON.stringify([[0,0,0],[0,0,0]])},
+                { key: 'Org1Record', value: JSON.stringify([0]) },
+                { key: 'Org2Record', value: JSON.stringify([0]) },
+                { key: 'Org1Gain', value: JSON.stringify([0]) },
+                { key: 'Org2Gain', value: JSON.stringify([0]) },
+                { key: 'Org1Loss', value: JSON.stringify([0]) },
+                { key: 'Org2Loss', value: JSON.stringify([0]) }
+            ]
+             */
+
+            //save states of data for database
+            var stateData = await initializeStateData();
+            var Org1Record = await initializeData('Org1Record');
+            var Org2Record = await initializeData('Org2Record');
+            var Org1Gain = await initializeData('Org1Gain');
+            var Org2Gain = await initializeData('Org2Gain');
+            var Org1Loss = await initializeData('Org1Loss');
+            var Org2Loss = await initializeData('Org2Loss');
+
+
+            // Get data from chain and save to database
+            async function fetchData() {
                 let result = await contract.evaluateTransaction('GetAllAssets');
                 let assets = JSON.parse(result.toString());
                 let O1Rec = assets[0].TokenValue;
                 let O2Rec = assets[1].TokenValue;
+                let stateCheckpoint = {"Org1": O1Rec, "Org2": O2Rec}
                 let O1Loss = 0;
                 let O2Loss = 0;
                 let O1Gain = 0;
@@ -143,7 +262,50 @@ async function main() {
                     }
                 }
                 oldData = assets;
-                res.send([[O1Rec, O1Gain, O1Loss], [O2Rec, O2Gain, O2Loss]]);
+                stateData = [[O1Rec, O1Gain, O1Loss], [O2Rec, O2Gain, O2Loss]];
+                Org1Record = [...Org1Record,O1Rec];
+                Org2Record = [...Org2Record,O2Rec];
+                if (stateData[0][2] === 0) {
+                    Org1Gain = [...Org1Gain,Org1Gain[Org1Gain.length - 1]];
+                }
+                else {
+                    Org1Gain = [...Org1Gain,stateData[0][2] * -1];
+                }
+                if (stateData[0][1] === 0) {
+                    Org1Loss = [...Org1Loss,Org1Loss[Org1Loss.length - 1]];
+                }
+                else {
+                    Org1Loss = [...Org1Loss,stateData[0][1] * -1];
+                }
+                if (stateData[1][2] === 0) {
+                    Org2Gain = [...Org2Gain,Org2Gain[Org2Gain.length - 1]];
+                }
+                else {
+                    Org2Gain = [...Org2Gain,stateData[1][2] * -1];
+                }
+                if (stateData[1][1] === 0) {
+                    Org2Loss = [...Org2Loss,Org2Loss[Org2Loss.length - 1]];
+                }
+                else {
+                    Org2Loss = [...Org2Loss,stateData[1][1] * -1];
+                }
+
+                db.serialize(() => {
+                    db.run("INSERT OR REPLACE INTO data (key, value) VALUES ('stateData', ?)", JSON.stringify(stateData));
+                    db.run("INSERT OR REPLACE INTO data (key, value) VALUES ('Org1Record', ?)", JSON.stringify(Org1Record));
+                    db.run("INSERT OR REPLACE INTO data (key, value) VALUES ('Org2Record', ?)", JSON.stringify(Org2Record));
+                    db.run("INSERT OR REPLACE INTO data (key, value) VALUES ('Org1Gain', ?)", JSON.stringify(Org1Gain));
+                    db.run("INSERT OR REPLACE INTO data (key, value) VALUES ('Org2Gain', ?)", JSON.stringify(Org2Gain));
+                    db.run("INSERT OR REPLACE INTO data (key, value) VALUES ('Org1Loss', ?)", JSON.stringify(Org1Loss));
+                    db.run("INSERT OR REPLACE INTO data (key, value) VALUES ('Org2Loss', ?)", JSON.stringify(Org2Loss));
+                });
+                fs.writeFileSync(filePath0, JSON.stringify(stateCheckpoint, null, 2));
+                console.log("Fetch performed successfully");
+            }
+
+            // Sends processed data to frontend
+            app.get('/getData', async (req, res) => {
+                res.send([stateData, Org1Record, Org1Gain, Org1Loss, Org2Record, Org2Gain, Org2Loss]);
             });
 
             //Handshake Authentication
@@ -276,6 +438,9 @@ async function main() {
                 // Release Lock here
                 callback();
             }
+
+            // run fetch data every 10 sec
+            setInterval(fetchData, 10000);
 
             app.listen(3001, () => {
                 console.log('Server is running on port 3001');
