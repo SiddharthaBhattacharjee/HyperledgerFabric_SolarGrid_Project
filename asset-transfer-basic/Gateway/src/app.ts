@@ -172,6 +172,13 @@ async function main() {
             var ess_key1 = custom_Encrypt(session_key_org1,Org1Key);
             var ess_key2 = custom_Encrypt(session_key_org2,Org2Key);
 
+            type Client = {
+                req: express.Request;
+                res: express.Response;
+            };
+            
+            let clients: Client[] = [];
+
             //Remove these after testing
             console.log("Session key org1: " + session_key_org1);
             console.log("Session key org2: " + session_key_org2);
@@ -300,12 +307,28 @@ async function main() {
                     db.run("INSERT OR REPLACE INTO data (key, value) VALUES ('Org2Loss', ?)", JSON.stringify(Org2Loss));
                 });
                 fs.writeFileSync(filePath0, JSON.stringify(stateCheckpoint, null, 2));
+                let dataToSend = [stateData, Org1Record, Org1Gain, Org1Loss, Org2Record, Org2Gain, Org2Loss];
+                clients.forEach(client => client.res.write(`data: ${JSON.stringify(dataToSend)}\n\n`));
                 console.log("Fetch performed successfully");
             }
 
             // Sends processed data to frontend
             app.get('/getData', async (req, res) => {
                 res.send([stateData, Org1Record, Org1Gain, Org1Loss, Org2Record, Org2Gain, Org2Loss]);
+            });
+
+            //Set up connection from frontend
+            app.get('/events', (req, res) => {
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.setHeader('Cache-Control', 'no-cache');
+                res.setHeader('Connection', 'keep-alive');
+                res.flushHeaders();
+            
+                clients.push({ req, res });
+            
+                req.on('close', () => {
+                    clients = clients.filter(client => client.req !== req);
+                });
             });
 
             //Handshake Authentication
