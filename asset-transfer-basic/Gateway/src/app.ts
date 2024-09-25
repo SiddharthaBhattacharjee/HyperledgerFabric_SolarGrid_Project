@@ -307,14 +307,28 @@ async function main() {
                     db.run("INSERT OR REPLACE INTO data (key, value) VALUES ('Org2Loss', ?)", JSON.stringify(Org2Loss));
                 });
                 fs.writeFileSync(filePath0, JSON.stringify(stateCheckpoint, null, 2));
-                let dataToSend = [stateData, Org1Record, Org1Gain, Org1Loss, Org2Record, Org2Gain, Org2Loss];
+                let dataToSend = [stateData, 
+                    Org1Record.length>100?Org1Record.slice(-100):Org1Record, 
+                    Org1Gain.length>100?Org1Gain.slice(-100):Org1Gain, 
+                    Org1Loss.length>100?Org1Loss.slice(-100):Org1Loss, 
+                    Org2Record.length>100?Org2Record.slice(-100):Org2Record, 
+                    Org2Gain.length>100?Org2Gain.slice(-100):Org2Gain, 
+                    Org2Loss.length>100?Org2Loss.slice(-100):Org2Loss];
                 clients.forEach(client => client.res.write(`data: ${JSON.stringify(dataToSend)}\n\n`));
                 console.log("Fetch performed successfully");
             }
 
             // Sends processed data to frontend
             app.get('/getData', async (req, res) => {
-                res.send([stateData, Org1Record, Org1Gain, Org1Loss, Org2Record, Org2Gain, Org2Loss]);
+                let dataToSend = [stateData, 
+                    Org1Record.length>100?Org1Record.slice(-100):Org1Record, 
+                    Org1Gain.length>100?Org1Gain.slice(-100):Org1Gain, 
+                    Org1Loss.length>100?Org1Loss.slice(-100):Org1Loss, 
+                    Org2Record.length>100?Org2Record.slice(-100):Org2Record, 
+                    Org2Gain.length>100?Org2Gain.slice(-100):Org2Gain, 
+                    Org2Loss.length>100?Org2Loss.slice(-100):Org2Loss];
+                res.send(dataToSend);
+                console.log("New Client Mounted Successfully");
             });
 
             //Set up connection from frontend
